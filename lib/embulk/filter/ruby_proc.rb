@@ -5,44 +5,64 @@ module Embulk
       Plugin.register_filter("ruby_proc", self)
 
       def self.transaction(config, in_schema, &control)
-        # configuration code:
         task = {
-          "option1" => config.param("option1", :integer),                     # integer, required
-          "option2" => config.param("option2", :string, default: "myvalue"),  # string, optional
-          "option3" => config.param("option3", :string, default: nil),        # string, optional
+          "columns" => config.param("columns", :array),
+          "requires" => config.param("requires", :array, default: []),
         }
 
-        columns = [
-          Column.new(nil, "example", :string),
-          Column.new(nil, "column", :long),
-          Column.new(nil, "value", :double),
-        ]
-
-        out_columns = in_schema + columns
+        out_columns = in_schema.map do |col|
+          target = task["columns"].find { |filter_col| filter_col["name"] == col.name }
+          if target
+            type = target["type"] ? target["type"].to_sym : col.type
+            Embulk::Column.new(index: col.index, name: col.name, type: type || col.type, format: target["format"] || col.format)
+          else
+            col
+          end
+        end
 
         yield(task, out_columns)
       end
 
       def init
-        # initialization code:
-        @option1 = task["option1"]
-        @option2 = task["option2"]
-        @option3 = task["option3"]
+        task["requires"].each do |lib|
+          require lib
+        end
+        @procs = Hash[task["columns"].map {|col|
+          [col["name"], eval(col["proc"])]
+        }]
+        @skip_nils = Hash[task["columns"].map {|col|
+          [col["name"], col["skip_nil"].nil? ? true : !!col["skip_nil"]]
+        }]
       end
 
       def close
       end
 
       def add(page)
-        # filtering code:
-        add_columns = ["example",1,1.0]
         page.each do |record|
-          page_builder.add(record + add_columns)
+          record_hash = hashrize(record)
+          @procs.each do |col, pr|
+            next unless record_hash.has_key?(col)
+            next if record_hash[col].nil? && @skip_nils[col]
+
+            if pr.arity == 1
+              record_hash[col] = pr.call(record_hash[col])
+            else
+              record_hash[col] = pr.call(record_hash[col], record_hash)
+            end
+          end
+          page_builder.add(record_hash.values)
         end
       end
 
       def finish
         page_builder.finish
+      end
+
+      private
+
+      def hashrize(record)
+        Hash[in_schema.names.zip(record)]
       end
     end
 

@@ -1,0 +1,67 @@
+in:
+  type: file
+  path_prefix: ./sample_
+  parser:
+    charset: UTF-8
+    newline: CRLF
+    type: csv
+    delimiter: ','
+    quote: '"'
+    escape: '\'
+    null_string: 'NULL'
+    trim_if_not_quoted: false
+    skip_header_lines: 1
+    allow_extra_columns: false
+    allow_optional_columns: false
+    columns:
+    - {name: id, type: long}
+    - {name: account, type: long}
+    - {name: time, type: timestamp, format: '%Y-%m-%d %H:%M:%S'}
+    - {name: purchase, type: timestamp, format: '%Y%m%d'}
+    - {name: comment, type: string}
+    - {name: data, type: json}
+
+filters:
+  - type: ruby_proc
+    requires:
+      - cgi
+    columns:
+      - name: data
+        proc: |
+          ->(data) do
+            data["events"] = data["events"].map.with_index do |e, idx|
+              e.tap { |e_| e_["idx"] = idx }
+            end
+            data.to_json
+          end
+      - name: id
+        proc: |
+          ->(id) do
+            id * 2
+          end
+        type: string
+      - name: comment
+        proc: |
+          ->(comment, record) do
+            return [record["account"].to_s].to_json unless comment
+            comment.upcase.split(" ").map { |s| CGI.escape(s) }.to_json
+          end
+        skip_nil: false
+        type: json
+    target: events
+
+out:
+  type: file
+  path_prefix: ./out_
+  file_ext: tsv
+  formatter:
+    type: csv
+    delimiter: "\t"
+    newline: CRLF
+    newline_in_field: LF
+    charset: UTF-8
+    quote_policy: MINIMAL
+    quote: '"'
+    escape: "\\"
+    null_string: 'NULL'
+    default_timezone: 'UTC'
