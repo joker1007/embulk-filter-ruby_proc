@@ -39,7 +39,7 @@ filters:
             data["events"] = data["events"].map.with_index do |e, idx|
               e.tap { |e_| e_["idx"] = idx }
             end
-            data.to_json
+            data
           end
       - name: id
         proc: |
@@ -51,7 +51,7 @@ filters:
         proc: |
           ->(comment, record) do
             return [record["account"].to_s].to_json unless comment
-            comment.upcase.split(" ").map { |s| CGI.escape(s) }.to_json
+            comment.upcase.split(" ").map { |s| CGI.escape(s) }
           end
         skip_nil: false
         type: json
