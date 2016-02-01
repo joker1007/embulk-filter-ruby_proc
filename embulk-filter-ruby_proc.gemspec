@@ -7,7 +7,7 @@ Gem::Specification.new do |spec|
   spec.description   = "Filter each record by ruby proc"
   spec.email         = ["kakyoin.hierophant@gmail.com"]
   spec.licenses      = ["MIT"]
-  spec.homepage      = "https://github.com/kakyoin.hierophant/embulk-filter-ruby_proc"
+  spec.homepage      = "https://github.com/joker1007/embulk-filter-ruby_proc"
 
   spec.files         = `git ls-files`.split("\n") + Dir["classpath/*.jar"]
   spec.test_files    = spec.files.grep(%r{^(test|spec)/})
