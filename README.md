@@ -48,17 +48,22 @@ filters:
           end
         type: string
       - name: comment
-        proc: |
-          ->(comment, record) do
-            return [record["account"].to_s].to_json unless comment
-            comment.upcase.split(" ").map { |s| CGI.escape(s) }
-          end
+        proc_file: comment_upcase.rb
         skip_nil: false
         type: json
     target: events
 
 # ...
 
+```
+
+```rb
+# comment_upcase.rb
+
+->(comment, record) do
+  return [record["account"].to_s].to_json unless comment
+  comment.upcase.split(" ").map { |s| CGI.escape(s) }
+end
 ```
 
 ### preview

@@ -28,7 +28,11 @@ module Embulk
           require lib
         end
         @procs = Hash[task["columns"].map {|col|
-          [col["name"], eval(col["proc"])]
+          if col["proc"]
+            [col["name"], eval(col["proc"])]
+          else
+            [col["name"], eval(File.read(col["proc_file"]), binding, File.expand_path(col["proc_file"]))]
+          end
         }]
         @skip_nils = Hash[task["columns"].map {|col|
           [col["name"], col["skip_nil"].nil? ? true : !!col["skip_nil"]]
