@@ -25,6 +25,11 @@ filters:
   - type: ruby_proc
     requires:
       - cgi
+    rows:
+      - proc: |
+          ->(record) do
+            [record.dup, record.dup.tap { |r| r["id"] += 10 }]
+          end
     columns:
       - name: data
         proc: |
@@ -44,7 +49,6 @@ filters:
         proc_file: comment_upcase.rb
         skip_nil: false
         type: json
-    target: events
 
 out:
   type: file
