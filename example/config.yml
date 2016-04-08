@@ -25,6 +25,8 @@ filters:
   - type: ruby_proc
     requires:
       - cgi
+    variables:
+      multiply: 3
     rows:
       - proc: |
           ->(record) do
@@ -42,7 +44,7 @@ filters:
       - name: id
         proc: |
           ->(id) do
-            id * 2
+            id * variables["multiply"]
           end
         type: string
       - name: comment

@@ -1,6 +1,17 @@
 module Embulk
   module Filter
 
+    class Evaluator
+      attr_reader :variables
+      def initialize(variables)
+        @variables = variables
+      end
+
+      def get_binding
+        binding
+      end
+    end
+
     class RubyProc < FilterPlugin
       Plugin.register_filter("ruby_proc", self)
 
@@ -9,6 +20,7 @@ module Embulk
           "columns" => config.param("columns", :array, default: []),
           "rows" => config.param("rows", :array, default: []),
           "requires" => config.param("requires", :array, default: []),
+          "variables" => config.param("variables", :hash, default: {}),
         }
 
         out_columns = in_schema.map do |col|
@@ -29,18 +41,20 @@ module Embulk
           require lib
         end
 
+        evaluator_binding = Evaluator.new(task["variables"]).get_binding
+
         @procs = Hash[task["columns"].map {|col|
           if col["proc"]
-            [col["name"], eval(col["proc"])]
+            [col["name"], eval(col["proc"], evaluator_binding)]
           else
-            [col["name"], eval(File.read(col["proc_file"]), binding, File.expand_path(col["proc_file"]))]
+            [col["name"], eval(File.read(col["proc_file"]), evaluator_binding, File.expand_path(col["proc_file"]))]
           end
         }]
         @row_procs = task["rows"].map {|rowdef|
           if rowdef["proc"]
-            eval(rowdef["proc"])
+            eval(rowdef["proc"], evaluator_binding)
           else
-            eval(File.read(rowdef["proc_file"]), binding, File.expand_path(rowdef["proc_file"]))
+            eval(File.read(rowdef["proc_file"]), evaluator_binding, File.expand_path(rowdef["proc_file"]))
           end
         }.compact
         raise "Need columns or rows parameter" if @row_procs.empty? && @procs.empty?
