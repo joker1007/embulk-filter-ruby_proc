@@ -1,7 +1,7 @@
 
 Gem::Specification.new do |spec|
   spec.name          = "embulk-filter-ruby_proc"
-  spec.version       = "0.3.0"
+  spec.version       = "0.4.0"
   spec.authors       = ["joker1007"]
   spec.summary       = "Ruby Proc filter plugin for Embulk"
   spec.description   = "Filter each record by ruby proc"
