@@ -72,8 +72,18 @@ module Embulk
           if @row_procs.empty?
             record_hashes = [hashrize(record)]
           else
-            record_hashes = @row_procs.flat_map do |pr|
-              pr.call(hashrize(record))
+            record_hashes = @row_procs.each_with_object([]) do |pr, arr|
+              result = pr.call(hashrize(record))
+              case result
+              when Array
+                result.each do |r|
+                  arr << r
+                end
+              when Hash
+                arr << result
+              else
+                raise "row proc return value must be a Array or Hash"
+              end
             end
           end
 
