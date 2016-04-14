@@ -1,4 +1,5 @@
 require 'thread'
+require 'securerandom'
 
 module Embulk
   module Filter
@@ -50,37 +51,46 @@ module Embulk
           require lib
         end
 
+        @proc_store ||= {}
+        @row_proc_store ||= {}
+        transaction_id = rand(100000000)
+        until !@proc_store.has_key?(transaction_id)
+          transaction_id = rand(100000000)
+        end
         evaluator_binding = Evaluator.new(task["variables"]).get_binding
 
         # In order to avoid multithread probrem, initialize procs here
-        @procs = Hash[task["columns"].map {|col|
+        @proc_store[transaction_id] = procs = Hash[task["columns"].map {|col|
           if col["proc"]
             [col["name"], eval(col["proc"], evaluator_binding)]
           else
             [col["name"], eval(File.read(col["proc_file"]), evaluator_binding, File.expand_path(col["proc_file"]))]
           end
         }]
-        @row_procs = task["rows"].map {|rowdef|
+        @row_proc_store[transaction_id] = row_procs = task["rows"].map {|rowdef|
           if rowdef["proc"]
             eval(rowdef["proc"], evaluator_binding)
           else
             eval(File.read(rowdef["proc_file"]), evaluator_binding, File.expand_path(rowdef["proc_file"]))
           end
         }.compact
-        raise "Need columns or rows parameter" if @row_procs.empty? && @procs.empty?
+        task["transaction_id"] = transaction_id
+        raise "Need columns or rows parameter" if procs.empty? && row_procs.empty?
 
         yield(task, out_columns)
       end
 
-      def self.procs
-        @procs
+      def self.proc_store
+        @proc_store
       end
 
-      def self.row_procs
-        @row_procs
+      def self.row_proc_store
+        @row_proc_store
       end
 
       def init
+        @procs = self.class.proc_store[task["transaction_id"]]
+        @row_procs = self.class.row_proc_store[task["transaction_id"]]
         @skip_nils = Hash[task["columns"].map {|col|
           [col["name"], col["skip_nil"].nil? ? true : !!col["skip_nil"]]
         }]
@@ -136,11 +146,11 @@ module Embulk
       end
 
       def procs
-        self.class.procs
+        @procs
       end
 
       def row_procs
-        self.class.row_procs
+        @row_procs
       end
 
       def skip_nils

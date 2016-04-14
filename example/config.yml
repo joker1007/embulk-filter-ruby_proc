@@ -23,8 +23,6 @@ in:
 
 filters:
   - type: ruby_proc
-    requires:
-      - cgi
     variables:
       multiply: 3
     rows:
@@ -47,6 +45,11 @@ filters:
             id * variables["multiply"]
           end
         type: string
+
+  - type: ruby_proc
+    requires:
+      - cgi
+    columns:
       - name: comment
         proc_file: comment_upcase.rb
         skip_nil: false
