@@ -1,18 +1,31 @@
+require 'thread'
+
 module Embulk
   module Filter
 
-    class Evaluator
-      attr_reader :variables
-      def initialize(variables)
-        @variables = variables
-      end
-
-      def get_binding
-        binding
-      end
-    end
-
     class RubyProc < FilterPlugin
+
+      class Evaluator
+        attr_reader :variables
+        @mutex = Mutex.new
+
+        def self.mutex
+          @mutex
+        end
+
+        def initialize(variables)
+          @variables = variables
+        end
+
+        def get_binding
+          binding
+        end
+
+        def mutex
+          self.class.mutex
+        end
+      end
+
       Plugin.register_filter("ruby_proc", self)
 
       def self.transaction(config, in_schema, &control)
@@ -33,16 +46,13 @@ module Embulk
           end
         end
 
-        yield(task, out_columns)
-      end
-
-      def init
         task["requires"].each do |lib|
           require lib
         end
 
         evaluator_binding = Evaluator.new(task["variables"]).get_binding
 
+        # In order to avoid multithread probrem, initialize procs here
         @procs = Hash[task["columns"].map {|col|
           if col["proc"]
             [col["name"], eval(col["proc"], evaluator_binding)]
@@ -59,6 +69,18 @@ module Embulk
         }.compact
         raise "Need columns or rows parameter" if @row_procs.empty? && @procs.empty?
 
+        yield(task, out_columns)
+      end
+
+      def self.procs
+        @procs
+      end
+
+      def self.row_procs
+        @row_procs
+      end
+
+      def init
         @skip_nils = Hash[task["columns"].map {|col|
           [col["name"], col["skip_nil"].nil? ? true : !!col["skip_nil"]]
         }]
@@ -69,10 +91,10 @@ module Embulk
 
       def add(page)
         page.each do |record|
-          if @row_procs.empty?
+          if row_procs.empty?
             record_hashes = [hashrize(record)]
           else
-            record_hashes = @row_procs.each_with_object([]) do |pr, arr|
+            record_hashes = row_procs.each_with_object([]) do |pr, arr|
               result = pr.call(hashrize(record))
               case result
               when Array
@@ -88,9 +110,9 @@ module Embulk
           end
 
           record_hashes.each do |record_hash|
-            @procs.each do |col, pr|
+            procs.each do |col, pr|
               next unless record_hash.has_key?(col)
-              next if record_hash[col].nil? && @skip_nils[col]
+              next if record_hash[col].nil? && skip_nils[col]
 
               if pr.arity == 1
                 record_hash[col] = pr.call(record_hash[col])
@@ -111,6 +133,18 @@ module Embulk
 
       def hashrize(record)
         Hash[in_schema.names.zip(record)]
+      end
+
+      def procs
+        self.class.procs
+      end
+
+      def row_procs
+        self.class.row_procs
+      end
+
+      def skip_nils
+        @skip_nils
       end
     end
 
