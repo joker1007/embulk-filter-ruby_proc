@@ -25,6 +25,18 @@ filters:
   - type: ruby_proc
     variables:
       multiply: 3
+    before:
+      - proc: |
+          -> do
+            puts "before proc"
+            @started_at = Time.now
+          end
+    after:
+      - proc: |
+          -> do
+            puts "after proc"
+            p Time.now - @started_at
+          end
     rows:
       - proc: |
           ->(record) do

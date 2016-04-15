@@ -33,6 +33,8 @@ module Embulk
         task = {
           "columns" => config.param("columns", :array, default: []),
           "rows" => config.param("rows", :array, default: []),
+          "before" => config.param("before", :array, default: []),
+          "after" => config.param("after", :array, default: []),
           "requires" => config.param("requires", :array, default: []),
           "variables" => config.param("variables", :hash, default: {}),
         }
@@ -60,6 +62,13 @@ module Embulk
         evaluator_binding = Evaluator.new(task["variables"]).get_binding
 
         # In order to avoid multithread probrem, initialize procs here
+        before_procs = task["before"].map {|before|
+          if before["proc"]
+            eval(before["proc"], evaluator_binding)
+          else
+            eval(File.read(before["proc_file"]), evaluator_binding, File.expand_path(before["proc_file"]))
+          end
+        }
         @proc_store[transaction_id] = procs = Hash[task["columns"].map {|col|
           if col["proc"]
             [col["name"], eval(col["proc"], evaluator_binding)]
@@ -77,7 +86,23 @@ module Embulk
         task["transaction_id"] = transaction_id
         raise "Need columns or rows parameter" if procs.empty? && row_procs.empty?
 
+        before_procs.each do |pr|
+          pr.call
+        end
+
         yield(task, out_columns)
+
+        after_procs = task["after"].map {|after|
+          if after["proc"]
+            eval(after["proc"], evaluator_binding)
+          else
+            eval(File.read(after["proc_file"]), evaluator_binding, File.expand_path(after["proc_file"]))
+          end
+        }
+
+        after_procs.each do |pr|
+          pr.call
+        end
       end
 
       def self.proc_store

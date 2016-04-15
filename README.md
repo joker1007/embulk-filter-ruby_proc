@@ -34,6 +34,18 @@ filters:
       - cgi
     variables:
       multiply: 3
+    before:
+      - proc: |
+          -> do
+            puts "before proc"
+            @started_at = Time.now
+          end
+    after:
+      - proc: |
+          -> do
+            puts "after proc"
+            p Time.now - @started_at
+          end
     rows:
       - proc: |
           ->(record) do
@@ -72,8 +84,11 @@ filters:
 end
 ```
 
-rows proc must return array of record hash.
-And user must take care of object identity. Otherwise, error may be occurred when plugin applys column procs.
+- `before` and `after` is executed at once
+- procs is evaluated on same binding (instance of Evaluator class)
+  - instance variable is shared
+- rows proc must return record hash or array of record hash.
+  - user must take care of object identity. Otherwise, error may be occurred when plugin applys column procs.
 
 ### preview
 ```
