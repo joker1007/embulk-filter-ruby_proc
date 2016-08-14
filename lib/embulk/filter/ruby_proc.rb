@@ -113,9 +113,39 @@ module Embulk
         @row_proc_store
       end
 
+      def self.parse_col_procs(columns, evaluator_binding)
+        Hash[columns.map {|col|
+          if col["proc"]
+            [col["name"], eval(col["proc"], evaluator_binding)]
+          else
+            [col["name"], eval(File.read(col["proc_file"]), evaluator_binding, File.expand_path(col["proc_file"]))]
+          end
+        }]
+      end
+
+      def self.parse_row_procs(rows, evaluator_binding)
+        rows.map {|rowdef|
+          if rowdef["proc"]
+            eval(rowdef["proc"], evaluator_binding)
+          else
+            eval(File.read(rowdef["proc_file"]), evaluator_binding, File.expand_path(rowdef["proc_file"]))
+          end
+        }.compact
+      end
+
       def init
-        @procs = self.class.proc_store[task["transaction_id"]]
-        @row_procs = self.class.row_proc_store[task["transaction_id"]]
+        task["requires"].each do |lib|
+          require lib
+        end
+
+        if self.class.proc_store.nil? || self.class.row_proc_store.nil?
+          evaluator_binding = Evaluator.new(task["variables"]).get_binding
+          @procs = self.class.parse_col_procs(task["columns"], evaluator_binding)
+          @row_procs = self.class.parse_row_procs(task["rows"], evaluator_binding)
+        else
+          @procs = self.class.proc_store[task["transaction_id"]]
+          @row_procs = self.class.row_proc_store[task["transaction_id"]]
+        end
         @skip_nils = Hash[task["columns"].map {|col|
           [col["name"], col["skip_nil"].nil? ? true : !!col["skip_nil"]]
         }]
