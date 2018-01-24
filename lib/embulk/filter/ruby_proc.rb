@@ -5,7 +5,6 @@ module Embulk
   module Filter
 
     class RubyProc < FilterPlugin
-      SkipRecord = Object.new
 
       class Evaluator
         attr_reader :variables
@@ -191,9 +190,9 @@ module Embulk
           end
 
           record_hashes.each do |record_hash|
-            catch SkipRecord do
+            catch :skip_record do
               skip_row_procs.each do |pr|
-                throw SkipRecord if pr.call(record_hash)
+                throw :skip_record if pr.call(record_hash)
               end
 
               procs.each do |col, pr|
