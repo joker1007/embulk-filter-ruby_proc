@@ -175,16 +175,18 @@ module Embulk
             record_hashes = [hashrize(record)]
           else
             record_hashes = row_procs.each_with_object([]) do |pr, arr|
-              result = pr.call(hashrize(record))
-              case result
-              when Array
-                result.each do |r|
-                  arr << r
+              catch :skip_record do
+                result = pr.call(hashrize(record))
+                case result
+                when Array
+                  result.each do |r|
+                    arr << r
+                  end
+                when Hash
+                  arr << result
+                else
+                  raise "row proc return value must be a Array or Hash"
                 end
-              when Hash
-                arr << result
-              else
-                raise "row proc return value must be a Array or Hash"
               end
             end
           end
