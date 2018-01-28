@@ -33,6 +33,7 @@ module Embulk
         task = {
           "columns" => config.param("columns", :array, default: []),
           "rows" => config.param("rows", :array, default: []),
+          "skip_rows" => config.param("skip_rows", :array, default: []),
           "before" => config.param("before", :array, default: []),
           "after" => config.param("after", :array, default: []),
           "requires" => config.param("requires", :array, default: []),
@@ -55,6 +56,7 @@ module Embulk
 
         @proc_store ||= {}
         @row_proc_store ||= {}
+        @skip_row_proc_store ||= {}
         transaction_id = rand(100000000)
         until !@proc_store.has_key?(transaction_id)
           transaction_id = rand(100000000)
@@ -83,8 +85,15 @@ module Embulk
             eval(File.read(rowdef["proc_file"]), evaluator_binding, File.expand_path(rowdef["proc_file"]))
           end
         }.compact
+        @skip_row_proc_store[transaction_id] = skip_row_procs = task["skip_rows"].map {|rowdef|
+          if rowdef["proc"]
+            eval(rowdef["proc"], evaluator_binding)
+          else
+            eval(File.read(rowdef["proc_file"]), evaluator_binding, File.expand_path(rowdef["proc_file"]))
+          end
+        }.compact
         task["transaction_id"] = transaction_id
-        raise "Need columns or rows parameter" if procs.empty? && row_procs.empty?
+        raise "Need columns or rows parameter" if procs.empty? && row_procs.empty? && skip_row_procs.empty?
 
         before_procs.each do |pr|
           pr.call
@@ -113,6 +122,10 @@ module Embulk
         @row_proc_store
       end
 
+      def self.skip_row_proc_store
+        @skip_row_proc_store
+      end
+
       def self.parse_col_procs(columns, evaluator_binding)
         Hash[columns.map {|col|
           if col["proc"]
@@ -138,13 +151,15 @@ module Embulk
           require lib
         end
 
-        if self.class.proc_store.nil? || self.class.row_proc_store.nil?
+        if self.class.proc_store.nil? || self.class.row_proc_store.nil? || self.class.skip_row_proc_store.nil?
           evaluator_binding = Evaluator.new(task["variables"]).get_binding
           @procs = self.class.parse_col_procs(task["columns"], evaluator_binding)
           @row_procs = self.class.parse_row_procs(task["rows"], evaluator_binding)
+          @skip_row_procs = self.class.parse_row_procs(task["skip_rows"], evaluator_binding)
         else
           @procs = self.class.proc_store[task["transaction_id"]]
           @row_procs = self.class.row_proc_store[task["transaction_id"]]
+          @skip_row_procs = self.class.skip_row_proc_store[task["transaction_id"]]
         end
         @skip_nils = Hash[task["columns"].map {|col|
           [col["name"], col["skip_nil"].nil? ? true : !!col["skip_nil"]]
@@ -175,17 +190,23 @@ module Embulk
           end
 
           record_hashes.each do |record_hash|
-            procs.each do |col, pr|
-              next unless record_hash.has_key?(col)
-              next if record_hash[col].nil? && skip_nils[col]
-
-              if pr.arity == 1
-                record_hash[col] = pr.call(record_hash[col])
-              else
-                record_hash[col] = pr.call(record_hash[col], record_hash)
+            catch :skip_record do
+              skip_row_procs.each do |pr|
+                throw :skip_record if pr.call(record_hash)
               end
+
+              procs.each do |col, pr|
+                next unless record_hash.has_key?(col)
+                next if record_hash[col].nil? && skip_nils[col]
+
+                if pr.arity == 1
+                  record_hash[col] = pr.call(record_hash[col])
+                else
+                  record_hash[col] = pr.call(record_hash[col], record_hash)
+                end
+              end
+              page_builder.add(record_hash.values)
             end
-            page_builder.add(record_hash.values)
           end
         end
       end
@@ -206,6 +227,10 @@ module Embulk
 
       def row_procs
         @row_procs
+      end
+
+      def skip_row_procs
+        @skip_row_procs
       end
 
       def skip_nils
