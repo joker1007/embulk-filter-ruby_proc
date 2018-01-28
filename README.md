@@ -98,12 +98,13 @@ end
   - user must take care of object identity. Otherwise, error may be occurred when plugin applys column procs.
 
 ### proc execution order
+
 1. before procs
 1. per record
-  1. all row procs
-  1. per record applied row procs
-    1. all skip\_row procs
-    1. column procs
+    1. all row procs
+    1. per record applied row procs
+        1. all skip\_row procs
+        1. column procs
 1. after procs
 
 ### preview
