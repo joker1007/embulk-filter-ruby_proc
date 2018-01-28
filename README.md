@@ -51,6 +51,11 @@ filters:
           ->(record) do
             [record.dup, record.dup.tap { |r| r["id"] += 10 }]
           end
+    skip_rows:
+      - proc: |
+          ->(record) do
+            record["id"].odd?
+          end
     columns:
       - name: data
         proc: |
@@ -75,6 +80,8 @@ filters:
 
 ```
 
+If you want to skip record in "rows proc" or "columns proc", use `throw :skip_record`.
+
 ```rb
 # comment_upcase.rb
 
@@ -89,6 +96,15 @@ end
   - instance variable is shared
 - rows proc must return record hash or array of record hash.
   - user must take care of object identity. Otherwise, error may be occurred when plugin applys column procs.
+
+### proc execution order
+1. before procs
+1. per record
+  1. all row procs
+  1. per record applied row procs
+    1. all skip\_row procs
+    1. column procs
+1. after procs
 
 ### preview
 ```
