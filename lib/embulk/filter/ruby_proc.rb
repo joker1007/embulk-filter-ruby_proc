@@ -220,7 +220,15 @@ module Embulk
       private
 
       def hashrize(record)
-        Hash[in_schema.names.zip(record)]
+        Hash[in_schema.names.zip(record.map {|v|
+          case v
+          when ::Java::OrgJruby::RubyTime
+            # change into ruby object
+            v.getgm
+          else
+            v
+          end
+        })]
       end
 
       def procs
