@@ -75,6 +75,13 @@ filters:
         proc_file: comment_upcase.rb
         skip_nil: false
         type: json
+    pages:
+      - proc: |
+          ->(records) do
+            records.map do |record|
+              record.dup.tap { |r| r["id"] += 1 }
+            end
+          end
 
 # ...
 
@@ -96,6 +103,8 @@ end
   - instance variable is shared
 - rows proc must return record hash or array of record hash.
   - user must take care of object identity. Otherwise, error may be occurred when plugin applys column procs.
+- pages proc must return array of record hash.
+  - user must take care of object identity. Otherwise, error may be occurred when plugin applys column procs.
 
 ### proc execution order
 
@@ -105,6 +114,7 @@ end
     1. per record applied row procs
         1. all skip\_row procs
         1. column procs
+1. per page procs
 1. after procs
 
 ### preview
@@ -113,13 +123,13 @@ end
 | id:string | account:long |          time:timestamp |      purchase:timestamp |                             comment:json |                                                                                data:json |
 +-----------+--------------+-------------------------+-------------------------+------------------------------------------+------------------------------------------------------------------------------------------+
 |         3 |       32,864 | 2015-01-27 19:23:49 UTC | 2015-01-27 00:00:00 UTC |                               ["EMBULK"] | {"events":[{"id":1,"name":"Name1","idx":0},{"id":2,"name":"Name2","idx":1}],"foo":"bar"} |
-|        33 |       32,864 | 2015-01-27 19:23:49 UTC | 2015-01-27 00:00:00 UTC |                               ["EMBULK"] | {"events":[{"id":1,"name":"Name1","idx":0},{"id":2,"name":"Name2","idx":1}],"foo":"bar"} |
+|        34 |       32,864 | 2015-01-27 19:23:49 UTC | 2015-01-27 00:00:00 UTC |                               ["EMBULK"] | {"events":[{"id":1,"name":"Name1","idx":0},{"id":2,"name":"Name2","idx":1}],"foo":"bar"} |
 |         6 |       14,824 | 2015-01-27 19:01:23 UTC | 2015-01-27 00:00:00 UTC |                       ["EMBULK","JRUBY"] |                                                                                          |
-|        36 |       14,824 | 2015-01-27 19:01:23 UTC | 2015-01-27 00:00:00 UTC |                       ["EMBULK","JRUBY"] |                                                                                          |
+|        37 |       14,824 | 2015-01-27 19:01:23 UTC | 2015-01-27 00:00:00 UTC |                       ["EMBULK","JRUBY"] |                                                                                          |
 |         9 |       27,559 | 2015-01-28 02:20:02 UTC | 2015-01-28 00:00:00 UTC | ["EMBULK","%22CSV%22","PARSER","PLUGIN"] |                                                                                          |
-|        39 |       27,559 | 2015-01-28 02:20:02 UTC | 2015-01-28 00:00:00 UTC | ["EMBULK","%22CSV%22","PARSER","PLUGIN"] |                                                                                          |
+|        40 |       27,559 | 2015-01-28 02:20:02 UTC | 2015-01-28 00:00:00 UTC | ["EMBULK","%22CSV%22","PARSER","PLUGIN"] |                                                                                          |
 |        12 |       11,270 | 2015-01-29 11:54:36 UTC | 2015-01-29 00:00:00 UTC |                                ["11270"] |                                                                                          |
-|        42 |       11,270 | 2015-01-29 11:54:36 UTC | 2015-01-29 00:00:00 UTC |                                ["11270"] |                                                                                          |
+|        43 |       11,270 | 2015-01-29 11:54:36 UTC | 2015-01-29 00:00:00 UTC |                                ["11270"] |                                                                                          |
 +-----------+--------------+-------------------------+-------------------------+------------------------------------------+------------------------------------------------------------------------------------------+
 ```
 
