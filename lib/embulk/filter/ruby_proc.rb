@@ -87,11 +87,11 @@ module Embulk
             eval(File.read(rowdef["proc_file"]), evaluator_binding, File.expand_path(rowdef["proc_file"]))
           end
         }.compact
-        @page_proc_store[transaction_id] = page_procs = task["pages"].map {|rowdef|
-          if rowdef["proc"]
-            eval(rowdef["proc"], evaluator_binding)
+        @page_proc_store[transaction_id] = page_procs = task["pages"].map {|page|
+          if page["proc"]
+            eval(page["proc"], evaluator_binding)
           else
-            eval(File.read(rowdef["proc_file"]), evaluator_binding, File.expand_path(rowdef["proc_file"]))
+            eval(File.read(page["proc_file"]), evaluator_binding, File.expand_path(page["proc_file"]))
           end
         }.compact
         @skip_row_proc_store[transaction_id] = skip_row_procs = task["skip_rows"].map {|rowdef|
@@ -162,11 +162,11 @@ module Embulk
       end
 
       def self.parse_page_procs(rows, evaluator_binding)
-        rows.map {|rowdef|
-          if rowdef["proc"]
-            eval(rowdef["proc"], evaluator_binding)
+        rows.map {|page|
+          if page["proc"]
+            eval(page["proc"], evaluator_binding)
           else
-            eval(File.read(rowdef["proc_file"]), evaluator_binding, File.expand_path(rowdef["proc_file"]))
+            eval(File.read(page["proc_file"]), evaluator_binding, File.expand_path(page["proc_file"]))
           end
         }.compact
       end
