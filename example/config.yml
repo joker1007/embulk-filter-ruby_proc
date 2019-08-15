@@ -61,7 +61,7 @@ filters:
       - proc: |
           ->(records) do
             records.map do |record|
-              record.dup.tap { |r| r["id"] += 1 }
+              record.tap { |r| r["id"] += 1 }
             end
           end
 

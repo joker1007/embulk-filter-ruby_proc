@@ -79,7 +79,7 @@ filters:
       - proc: |
           ->(records) do
             records.map do |record|
-              record.dup.tap { |r| r["id"] += 1 }
+              record.tap { |r| r["id"] += 1 }
             end
           end
 
@@ -104,7 +104,6 @@ end
 - rows proc must return record hash or array of record hash.
   - user must take care of object identity. Otherwise, error may be occurred when plugin applys column procs.
 - pages proc must return array of record hash.
-  - user must take care of object identity. Otherwise, error may be occurred when plugin applys column procs.
 
 ### proc execution order
 
