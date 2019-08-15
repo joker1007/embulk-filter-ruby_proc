@@ -161,8 +161,8 @@ module Embulk
         }.compact
       end
 
-      def self.parse_page_procs(rows, evaluator_binding)
-        rows.map {|page|
+      def self.parse_page_procs(pages, evaluator_binding)
+        pages.map {|page|
           if page["proc"]
             eval(page["proc"], evaluator_binding)
           else
