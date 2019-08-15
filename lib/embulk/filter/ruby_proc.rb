@@ -33,6 +33,8 @@ module Embulk
         task = {
           "columns" => config.param("columns", :array, default: []),
           "rows" => config.param("rows", :array, default: []),
+          "batch_rows" => config.param("batch_rows", :array, default: []),
+          "batch_size" => config.param("batch_size", :integer, default: 50),
           "skip_rows" => config.param("skip_rows", :array, default: []),
           "before" => config.param("before", :array, default: []),
           "after" => config.param("after", :array, default: []),
@@ -56,6 +58,7 @@ module Embulk
 
         @proc_store ||= {}
         @row_proc_store ||= {}
+        @batch_row_proc_store ||= {}
         @skip_row_proc_store ||= {}
         transaction_id = rand(100000000)
         until !@proc_store.has_key?(transaction_id)
@@ -85,6 +88,13 @@ module Embulk
             eval(File.read(rowdef["proc_file"]), evaluator_binding, File.expand_path(rowdef["proc_file"]))
           end
         }.compact
+        @batch_row_proc_store[transaction_id] = batch_row_procs = task["batch_rows"].map {|rowdef|
+          if rowdef["proc"]
+            eval(rowdef["proc"], evaluator_binding)
+          else
+            eval(File.read(rowdef["proc_file"]), evaluator_binding, File.expand_path(rowdef["proc_file"]))
+          end
+        }.compact
         @skip_row_proc_store[transaction_id] = skip_row_procs = task["skip_rows"].map {|rowdef|
           if rowdef["proc"]
             eval(rowdef["proc"], evaluator_binding)
@@ -93,7 +103,9 @@ module Embulk
           end
         }.compact
         task["transaction_id"] = transaction_id
-        raise "Need columns or rows parameter" if procs.empty? && row_procs.empty? && skip_row_procs.empty?
+        if procs.empty? && row_procs.empty? && batch_row_procs.empty? && skip_row_procs.empty?
+          raise "Need columns or rows or batch_rows parameter"
+        end
 
         before_procs.each do |pr|
           pr.call
@@ -122,6 +134,10 @@ module Embulk
         @row_proc_store
       end
 
+      def self.batch_row_proc_store
+        @batch_row_proc_store
+      end
+
       def self.skip_row_proc_store
         @skip_row_proc_store
       end
@@ -146,19 +162,31 @@ module Embulk
         }.compact
       end
 
+      def self.parse_batch_row_procs(rows, evaluator_binding)
+        rows.map {|rowdef|
+          if rowdef["proc"]
+            eval(rowdef["proc"], evaluator_binding)
+          else
+            eval(File.read(rowdef["proc_file"]), evaluator_binding, File.expand_path(rowdef["proc_file"]))
+          end
+        }.compact
+      end
+
       def init
         task["requires"].each do |lib|
           require lib
         end
 
-        if self.class.proc_store.nil? || self.class.row_proc_store.nil? || self.class.skip_row_proc_store.nil?
+        if self.class.proc_store.nil? || self.class.row_proc_store.nil? || self.class.batch_row_proc_store.nil? || self.class.skip_row_proc_store.nil?
           evaluator_binding = Evaluator.new(task["variables"]).get_binding
           @procs = self.class.parse_col_procs(task["columns"], evaluator_binding)
           @row_procs = self.class.parse_row_procs(task["rows"], evaluator_binding)
+          @batch_row_procs = self.class.parse_batch_row_procs(task["batch_rows"], evaluator_binding)
           @skip_row_procs = self.class.parse_row_procs(task["skip_rows"], evaluator_binding)
         else
           @procs = self.class.proc_store[task["transaction_id"]]
           @row_procs = self.class.row_proc_store[task["transaction_id"]]
+          @batch_row_procs = self.class.batch_row_proc_store[task["transaction_id"]]
           @skip_row_procs = self.class.skip_row_proc_store[task["transaction_id"]]
         end
         @skip_nils = Hash[task["columns"].map {|col|
@@ -170,13 +198,21 @@ module Embulk
       end
 
       def add(page)
-        page.each do |record|
+        # TODO: iterating 3 time. Decrease it to once
+        records = page.map { |r| hashrize(r) }
+        unless batch_row_procs.empty?
+          record_hashes = batch_row_procs.each do |pr|
+            pr.call(records)
+          end
+        end
+
+        records.each do |record|
           if row_procs.empty?
-            record_hashes = [hashrize(record)]
+            record_hashes = [record]
           else
             record_hashes = row_procs.each_with_object([]) do |pr, arr|
               catch :skip_record do
-                result = pr.call(hashrize(record))
+                result = pr.call(record)
                 case result
                 when Array
                   result.each do |r|
@@ -229,6 +265,10 @@ module Embulk
 
       def row_procs
         @row_procs
+      end
+
+      def batch_row_procs
+        @batch_row_procs
       end
 
       def skip_row_procs
