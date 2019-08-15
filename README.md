@@ -104,6 +104,7 @@ end
 - rows proc must return record hash or array of record hash.
   - user must take care of object identity. Otherwise, error may be occurred when plugin applys column procs.
 - pages proc must return array of record hash.
+  - use `page_size` option to increase size of processing record (ex. `-X page_size=64KB`)
 
 ### proc execution order
 
