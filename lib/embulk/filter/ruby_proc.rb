@@ -34,7 +34,6 @@ module Embulk
           "columns" => config.param("columns", :array, default: []),
           "rows" => config.param("rows", :array, default: []),
           "pages" => config.param("pages", :array, default: []),
-          "batch_size" => config.param("batch_size", :integer, default: 50),
           "skip_rows" => config.param("skip_rows", :array, default: []),
           "before" => config.param("before", :array, default: []),
           "after" => config.param("after", :array, default: []),
@@ -198,21 +197,14 @@ module Embulk
       end
 
       def add(page)
-        # TODO: iterating 3 time. Decrease it to once
-        records = page.map { |r| hashrize(r) }
-        unless page_procs.empty?
-          record_hashes = page_procs.each do |pr|
-            pr.call(records)
-          end
-        end
-
-        records.each do |record|
+        proc_records = []
+        page.each do |record|
           if row_procs.empty?
-            record_hashes = [record]
+            record_hashes = [hashrize(record)]
           else
             record_hashes = row_procs.each_with_object([]) do |pr, arr|
               catch :skip_record do
-                result = pr.call(record)
+                result = pr.call(hashrize(record))
                 case result
                 when Array
                   result.each do |r|
@@ -243,9 +235,20 @@ module Embulk
                   record_hash[col] = pr.call(record_hash[col], record_hash)
                 end
               end
-              page_builder.add(record_hash.values)
+              if page_procs.empty?
+                page_builder.add(record_hash.values)
+              else
+                proc_records << record_hash
+              end
             end
           end
+        end
+
+        unless page_procs.empty?
+          tmp_records = page_procs.each_with_object([]) do |pr, arr|
+            arr += pr.call(proc_records)
+          end
+          tmp_records.each { |record| page_builder.add(record.values) }
         end
       end
 
