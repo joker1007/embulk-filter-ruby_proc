@@ -246,7 +246,8 @@ module Embulk
 
         unless page_procs.empty?
           tmp_records = page_procs.each_with_object([]) do |pr, arr|
-            arr += pr.call(proc_records)
+            result = pr.call(proc_records)
+            result.each { |r| arr << r }
           end
           tmp_records.each { |record| page_builder.add(record.values) }
         end
