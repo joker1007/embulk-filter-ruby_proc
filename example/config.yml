@@ -57,6 +57,13 @@ filters:
             id * variables["multiply"]
           end
         type: string
+    pages:
+      - proc: |
+          ->(records) do
+            records.map do |record|
+              record.tap { |r| r["id"] += 1 }
+            end
+          end
 
   - type: ruby_proc
     requires:
